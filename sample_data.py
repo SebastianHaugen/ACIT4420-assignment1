@@ -1,7 +1,7 @@
 """Sample data used by main.py and tests.py.
 
-Provides generator-based sample sessions (via data_generator.py, with fixed
-seeds for reproducibility) plus a few hand-built raw observation dictionaries
+Provides generator-based sample sessions through data_generator.py, with fixed
+seeds for reproducibility + a few hand-built raw observation dictionaries
 for testing validation edge cases directly, independent of randomness.
 """
 
@@ -9,9 +9,9 @@ from data_generator import generate_fitness_data
 
 
 def get_sample_scenario(scenario, seed=1, number_of_windows=12):
-    """Return (profile, observations) for one scenario, with a fixed seed
-    so the same call always produces the same data.
-    """
+    # Return (profile, observations) for one scenario, with a fixed seed
+    # so the same call always produces the same data.
+
     return generate_fitness_data(
         participant_id="P001",
         scenario=scenario,
@@ -21,7 +21,6 @@ def get_sample_scenario(scenario, seed=1, number_of_windows=12):
 
 
 # Hand-built raw observations for validation edge-case tests.
-
 VALID_OBSERVATION = {
     "timestamp": 0,
     "heart_rate": 90,
@@ -31,6 +30,7 @@ VALID_OBSERVATION = {
     "signal_quality": 0.90,
 }
 
+# Hand-built raw observations with missing or impossible values for testing validation to test edge cases.
 MISSING_HEART_RATE = {
     "timestamp": 1,
     "heart_rate": None,

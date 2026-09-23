@@ -1,5 +1,5 @@
 """
-Option A, Smart Fitness Session Analyzer, the main code 
+Option A, Smart Fitness Session Analyzer
 """
 
 import statistics 
@@ -50,15 +50,17 @@ class Observation:
             return False, "signal quality too low"
          return True, ""
 
+# Second class as requiremnt from the assignment description
 class Participant:
     # THis class wil feature a participant and their personal baselin measurements
     def __init__(self, participant_id, baseline_heart_rate, baseline_skin_response, baseline_temperature):
         self.participant_id = participant_id
         
+        # Initialize the protected reference dictionary with baseline values
         self._reference = {
             "heart_rate": baseline_heart_rate,
             
-            # This will be the protected attributes which are onlly accessible through the reference dictionary
+            # This will be the protected attribute which are onlly accessible through the reference dictionary
             "skin_response": baseline_skin_response,
             "temperature": baseline_temperature
         }
@@ -85,27 +87,35 @@ class Participant:
         if value is None or value < 0:
             raise ValueError(f"Value for '{field}' must be a non-negative number.")
         self._reference[field] = value
-        
+
+# Third class as requiremnt from the assignment description        
 class Session:
     def __init__(self, participant, observations):
         self.participant = participant
         self.observations = observations
     
+    # Return the list of valid observations for the session
     def valid_observations(self):
         return [obs for obs in self.observations if obs.is_valid()[0]]
     
+    # Return the count of invalid observations for the session
     def invalid_count(self):
         return len([obs for obs in self.observations if not obs.is_valid()[0]])
-    
+
+# FOurth class as by the requirements of the assignment description
 class SessionAnalyzer:
     
+    # Min number of observations this can be tweaked, not sure what a good number is
     MIN_USABLE_OBSERVATIONS = 3
     
+    # Initialize the session analyzer with a session instance
     def __init__(self, session):
         self.session = session
     
+    # Analyze the session and return a summary of the results
     def analyze(self):
         usable = self.session.valid_observations()
+        # Initialize the result dictionary with basic session information
         result = {
             "participant_id": self.session.participant.participant_id,
             "total_observations": len(self.session.observations),
@@ -113,6 +123,7 @@ class SessionAnalyzer:
             "rejected_observations": self.session.invalid_count()
         }
         
+        # Check if there are enough usable observations for meaningful analysis
         if len(usable) < self.MIN_USABLE_OBSERVATIONS:
             result["classification"] = "insufficient_data"
             result["recovery_detected"] = False
@@ -122,26 +133,33 @@ class SessionAnalyzer:
             
             return result
         
+        # Extract heart rates and activity levels from usable observations
         heart_rates = [obs.heart_rate for obs in usable]
         activity_levels = [obs.activity_level for obs in usable]
         
+        # Compute summary statistics for heart rates and activity levels
         hr_summary =  compute_summary_stats(heart_rates)
         activity_summary = compute_summary_stats(activity_levels)
         
+        # Store the computed summary statistics in the result dictionary
         result["heart_rate_summary"] = hr_summary
         result["activity_level_summary"] = activity_summary
 
+        # Compare the average heart rate with the reference heart rate
         reference_hr = self.session.participant.reference["heart_rate"]
         result["heart_rate_vs_reference"] = round(hr_summary["average"] - reference_hr, 2)
         
+        # Detect recovery and classify the session intensity
         recovering = detect_recovery(usable)
         classification = classify_intensity(
             hr_summary["average"], reference_hr, activity_summary["average"]
         )
         
+        # Adjust classification if recovery is detected and the session is not resting
         if recovering and classification != "resting":
             classification = "recovering"
-            
+        
+        # Store the final classification and recovery status in the result dictionary
         result["classification"] = classification
         result["recovery_detected"] = recovering
         result["reasoning"] = build_reasoning(classification, hr_summary, reference_hr, recovering)
@@ -149,38 +167,47 @@ class SessionAnalyzer:
         return result
         
         
-        
+"""
+This part will include the standalone functions used for calculation, validation and presentation
+as explained in the assingment paper
+"""
+   
+# Statistical functions for analyzing fitness session data
 def compute_summary_stats(values):
-    """Return the average, minimum and maximum of a list of numbers."""
+    #Return the average, minimum and maximum of a list of numbers.
     return {
         "average": round(statistics.mean(values), 2),
         "minimum": round(min(values), 2),
         "maximum": round(max(values), 2),
     }
  
-        
+# Recovery detection based on heart rate and activity trends
 def detect_recovery(observations):
-    """Check whether heart rate and activity decline in the second half of
-    a session compared with the first half.
-    """
+    #Check whether heart rate and activity decline in the second half of
+    #a session compared with the first half.
     if len(observations) < 6:
         return False
- 
+    
+    # Split the observations into two halves for comparison.
     midpoint = len(observations) // 2
     first_half = observations[:midpoint]
     second_half = observations[midpoint:]
  
+    # Compute the average heart rate and activity level for each half.
     first_hr = statistics.mean(obs.heart_rate for obs in first_half)
     second_hr = statistics.mean(obs.heart_rate for obs in second_half)
     first_activity = statistics.mean(obs.activity_level for obs in first_half)
     second_activity = statistics.mean(obs.activity_level for obs in second_half)
  
+    # Determine if there is a significant drop in heart rate and activity level in the second half.
     return second_hr < first_hr - 5 and second_activity < first_activity - 0.1
 
+# Intensity classification based on heart rate and activity level
 def classify_intensity(avg_heart_rate, reference_heart_rate, avg_activity):
-    """Classify a session as resting, moderate activity or high activity,
-    based on how far heart rate and activity are from the personal baseline.
-    """
+    #Classify a session as resting, moderate activity or high activity,
+    #based on how far heart rate and activity are from the personal baseline.
+
+    # Calculate the gap between the average heart rate and the reference heart rate.
     hr_gap = avg_heart_rate - reference_heart_rate
     if hr_gap <= 10 and avg_activity <= 0.25:
         return "resting"
@@ -188,8 +215,9 @@ def classify_intensity(avg_heart_rate, reference_heart_rate, avg_activity):
         return "moderate activity"
     return "high activity"
 
+# Console report formatting for session results
 def format_console_report(result):
-    """Turn a result dictionary into a printable console report."""
+    #Turn a result dictionary into a printable console report.
     lines = ["=== Fitness Session Report ===", f"Participant: {result['participant_id']}"]
     lines.append(
         f"Observations received: {result['total_observations']} | "
@@ -197,12 +225,14 @@ def format_console_report(result):
         f"Rejected: {result['rejected_observations']}"
     )
 
+    # Handle the case where there is insufficient data for classification.
     if result["classification"] == "insufficient_data":
         lines.append("")
         lines.append("Classification: INSUFFICIENT DATA")
         lines.append(f"Reasoning: {result['reasoning']}")
         return "\n".join(lines)
 
+    # Summarize heart rate and activity level for the report.
     hr = result["heart_rate_summary"]
     act = result["activity_level_summary"]
     lines.append("")
@@ -215,8 +245,9 @@ def format_console_report(result):
     lines.append(f"Reasoning: {result['reasoning']}")
     return "\n".join(lines)
 
+# Reasoning builder for session classification
 def build_reasoning(classification, hr_summary, reference_hr, recovering):
-    """Produce a short human-readable explanation for a classification."""
+    # Produce a short human-readable explanation for a classification.
     gap = round(hr_summary["average"] - reference_hr, 1)
     text = f"Average heart rate was {hr_summary['average']} bpm ({gap:+} bpm vs reference)."
     if recovering:
@@ -227,6 +258,7 @@ def build_reasoning(classification, hr_summary, reference_hr, recovering):
         text += " Values remained elevated with no clear downward trend."
     return text
 
+# Session builder for generating test data
 def build_session(scenario, participant_id="P001", seed=42, number_of_windows=12):
     """Generate data for one scenario and wrap it into a Session object."""
     profile, raw_observations = generate_fitness_data(
@@ -239,6 +271,7 @@ def build_session(scenario, participant_id="P001", seed=42, number_of_windows=12
     observations = [Observation.from_dict(obs) for obs in raw_observations]
     return Session(participant, observations)
 
+# Main function to run the analysis on all scenarios and print the reports.
 def main():
     scenarios = ("resting", "moderate_activity", "high_activity", "recovery", "poor_quality")
     for scenario in scenarios:
@@ -246,6 +279,7 @@ def main():
         result = SessionAnalyzer(session).analyze()
 
         print(format_console_report(result))
+        print("="*50)  # Separator between scenarios for readability
  
  
 if __name__ == "__main__":
