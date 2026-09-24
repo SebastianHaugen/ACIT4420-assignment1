@@ -5,126 +5,100 @@
 
 ## What this project does
 
-This program simulates a fitness centre that receives heart-rate and other sensor
-readings from wearable devices during training sessions. It takes a stream of raw
-observations (timestamp, heart rate, skin response, temperature, activity level,
-signal quality), checks whether each reading is trustworthy, and groups the good
-readings into a session for one participant.
+This is a program that pretends to be a fitness centre getting data from wearable devices during training sessions. It takes in a bunch of raw readings (heart rate, skin response, temperature, activity level, signal quality, that kind of thing), checks whether each reading actually makes sense, and groups the good ones into a session for one participant. Made for the first assignmnet in the course ACIT4420 Problem-Solving with Scripting.
 
-Once a session is built, the program:
-
-- calculates summary statistics (average, min, max) for heart rate and the other
-  measurements,
-- compares those numbers against the participant's personal reference values,
-- classifies the session as **resting**, **moderate activity**, **high activity**,
-  **recovering**, or **insufficient data**,
-- checks whether heart rate and activity level drop off near the end of the
-  session (a sign of recovery), and
-- prints a readable console report explaining how many observations were used
-  and why the session was classified the way it was.
+Once it has a session, it works out the average, min and max for heart rate and activity level, compares those against the participant's own baseline, and figures out whether the session counts as resting, moderate activity, high activity, recovering, or just insufficient data if too much of it got rejected. It also checks if heart rate and activity dropped off near the end, which is basically how it decides someone is recovering. At the end it prints a normal readable report explaining what it found and why.
 
 ## Class design
 
-| Class | Responsibility |
-|---|---|
-| `Participant` | Stores a participant's identity and personal reference measurements (resting heart rate, max heart rate, etc.). The reference values are kept as a protected attribute and only reachable through a property/methods, so they can't be overwritten with bad data by accident. |
-| `Observation` | Represents one single measurement window from the wearable device. Knows how to validate itself (missing fields, out-of-range values, bad signal quality) and reports whether it is usable. |
-| `Session` | Composed of one `Participant` object and a list of `Observation` objects. This is the clearest example of composition in the project — a session *has* a participant and *has* observations, rather than being one of them. Session is responsible for filtering out invalid observations and handing off usable data to the analyzer. |
-| `SessionAnalyzer` (base class) | Defines the general steps needed to analyze a session: compute summaries, compare to reference values, classify, and check for recovery. |
-| `RecoveryAwareAnalyzer` (subclass of `SessionAnalyzer`) | Overrides the classification step to add recovery detection (checking whether the tail end of a session shows declining heart rate/activity). This is where inheritance and method overriding are used meaningfully — the base analyzer knows how to classify activity level, and the subclass adds the extra recovery-specific logic on top instead of duplicating the whole class. |
-| `ReportGenerator` | Takes the structured result dictionary produced by the analyzer and turns it into a readable console report. Kept separate from the analysis logic so that presentation and calculation don't get mixed together. |
+I created four classes different classes for this assignment.
 
-### Where the requirements are demonstrated
+`Observation` is one single reading. It knows how to build itself from the raw dictionary the generator spits out, and it knows how to check whether it's actually valid (missing values, impossible heart rate, bad signal quality and stuff like that).
 
-- **Composition:** `Session` contains a `Participant` and a list of `Observation` objects.
-- **Encapsulation:** `Participant`'s reference values are stored as `_reference_values` (protected) and only accessed/updated through a property and setter methods, which validate the new values before accepting them.
-- **Inheritance & overriding:** `RecoveryAwareAnalyzer` inherits from `SessionAnalyzer` and overrides the classification method to add recovery detection.
-- **Class/static method:** `Observation.from_raw_dict()` is a class method that builds an `Observation` from the raw dictionary produced by the data generator, keeping that conversion logic in one place. `Observation.is_within_human_range()` is a static method used to sanity-check a heart rate or temperature value without needing an instance.
-- **Standalone functions:** `validate_observation()`, `compute_summary_stats()`, `classify_intensity()`, `detect_recovery()`, and `format_console_report()` are written as plain functions rather than methods, since they do a single calculation/validation/presentation job that doesn't need to belong to a class.
+`Participant` holds the person's id and their baseline numbers (resting heart rate, skin response, temperature). I kept the baseline values behind a protected attribute called `_reference` so they can't just get overwritten by accident, you have to go through a property or the `update_reference` method which checks the value first.
+
+`Session` is just a participant plus a list of observations. This is the composition part of the assignment, a session isn't a type of participant or a type of observation, it just contains both, so composition made more sense than inheritance here.
+
+`SessionAnalyzer` takes a session and does the actual analysis, the summaries, the comparison to baseline, the classification, and the recovery check. It hands back everything as one dictionary.
+
+I decided not to force any inheritance into the design since nothing here is really an "is a" relationship, so instead of making something extend something else just to tick a box, I went with the assignment's other option which is to explain why composition made more sense. Session having a Participant and a list of Observations is that example.
+
+For the class method and static method requirement, `Observation.from_dict()` and `Participant.from_profile()` are both classmethods that build the object straight from a generator dictionary, and `Observation.is_within_range()` is a staticmethod since it doesn't need any instance data at all, it's just a reusable range check I use for a few different fields.
+
+The standalone functions are `compute_summary_stats()`, `classify_intensity()`, `detect_recovery()`, `build_reasoning()` and `format_console_report()`. None of these needed to be methods on a class, they each just do one job (a calculation, a classification, or printing something readable to the console).
 
 ## Assumptions and classification rules
 
-- An observation is considered **invalid** if any required field is missing, heart
-  rate is outside a realistic human range, signal quality is below a set
-  threshold (e.g. `0.5`), or activity level / skin response fall outside `0–1`.
-- A session needs a minimum number of valid observations (e.g. `3`) before it can
-  be classified; otherwise it is reported as **insufficient data**.
-- **Resting**: average heart rate close to the participant's resting reference
-  and low activity level throughout.
-- **Moderate / high activity**: average heart rate and activity level exceed the
-  resting reference by set margins, with high activity representing the larger
-  gap.
-- **Recovering**: heart rate and activity level are elevated earlier in the
-  session but show a clear downward trend in the final portion.
-- Exact thresholds and margins are defined as constants near the top of
-  `main.py` so they're easy to find and adjust.
+An observation gets rejected if heart rate or skin response is missing, heart rate is outside 30 to 220 bpm, activity level or signal quality is outside 0 to 1, or signal quality drops below 0.6.
+
+A session needs at least 3 usable observations before it even attempts a classification, otherwise it just reports insufficient data.
+
+Resting means the average heart rate is close to baseline (within about 10 bpm) and activity level stays low.
+
+Moderate activity is a bigger gap from baseline but still under a certain threshold, high activity is anything above that.
+
+Recovering overrides whatever classification it would've gotten if the second half of the session clearly shows heart rate and activity dropping compared to the first half.
+
+All the actual numbers for these thresholds live near the top of `main.py` so they're easy to find and tweak if needed.
 
 ## Project structure
 
 ```
 your-repository/
 ├── README.md
-├── main.py            # entry point, ties everything together and prints the report
-├── sample_data.py      # example participants/sessions built using the data generator
-├── tests.py             # test scenarios (see below)
-└── requirements.txt    # empty — standard library only
+├── data_generator.py   (the one given by the instructor, untouched)
+├── main.py              (all the classes plus the demo that runs everything)
+├── sample_data.py       (sample sessions and some hand made test data)
+├── tests.py              (the required scenarios plus a few extra checks)
+└── requirements.txt     (empty, only standard library used)
 ```
 
 ## Installation and running instructions
 
-This project only uses the Python standard library — no installation needed
-beyond Python itself.
+Nothing to install, it's all standard library.
 
 ```bash
-git clone https://github.com/USERNAME/REPOSITORY.git
-cd REPOSITORY
-python3 main.py
+git clone https://github.com/SebastianHaugen/ACIT4420-assignment1.git
+cd ACIT4420-assignment1
+python main.py
 ```
 
-If your system uses `python` instead of `python3`, run `python main.py` instead.
+My machine just uses python or py not python3 
 
-To run the test scenarios:
+To run the tests:
 
 ```bash
-python3 tests.py
+python tests.py
 ```
 
 ## Example output
 
 ```
 === Fitness Session Report ===
-Participant: Alex (ref. resting HR: 62 bpm)
-Observations received: 10 | Usable: 9 | Rejected: 1 (bad signal quality)
+Participant: P001
+Observations received: 12 | Usable: 12 | Rejected: 0
 
-Average heart rate: 134.2 bpm
-Average activity level: 0.71
-Heart rate vs reference: +72.2 bpm above resting
+Heart rate   - avg: 118.08 | min: 99 | max: 130
+Activity lvl - avg: 0.85 | min: 0.71 | max: 0.94
+Heart rate vs reference: +56.08 bpm
 
 Classification: HIGH ACTIVITY
 Recovery detected: No
-
-Reasoning: Average heart rate and activity level are well above the
-participant's resting reference throughout the session, with no
-downward trend near the end.
+Reasoning: Average heart rate was 118.08 bpm (+56.1 bpm vs reference). Values remained elevated with no clear downward trend.
 ```
 
 ## Test scenarios
 
-`tests.py` covers the five required scenarios:
-
-1. Resting session
-2. Moderate activity session
-3. High activity session
-4. Activity followed by recovery
-5. Poor-quality / invalid sensor data (mix of missing fields, bad signal
-   quality, out-of-range values)
+`tests.py` covers all five required scenarios: resting, moderate activity, high activity, recovery, and poor quality or invalid data. There are also a couple of extra tests for validating individual observations and for the insufficient data case when there just isn't enough usable data.
 
 ## Known limitations
 
-- Thresholds for classification (e.g. what counts as "high" activity) are
-  fixed constants rather than personalized per participant beyond the
-  resting/max heart rate reference.
-- Recovery detection only looks at the trend in the final segment of a
-  session; it does not model heart-rate-recovery time in seconds.
-- The program works entirely on simulated data from `data_generator.py` and
-  does not connect to a real wearable device or database.
+The classification thresholds (what counts as resting vs moderate vs high, and the MIN_USABLE_OBSERVATIONS = 3 cutoff) are just numbers I picked that seemed reasonable, not something derived from any real fitness science. A real system would probably tune these per participant or based on actual research.
+
+Skin response and temperature get validated and rejected if they're bad, but they don't actually factor into the classification or recovery logic at all, only heart rate and activity level do. So a session could have completely normal skin response and temperature and it wouldn't change the result either way.
+
+Recovery detection is pretty basic, it just splits the session in half and checks if the second half trends down compared to the first half. It doesn't look at how fast the decline happens or use the actual timestamp gaps, so a long slow decline and a short sharp one would get treated the same way.
+
+The generator uses a fixed seed in a few places (like the demo in main.py), so running it repeatedly gives identical results. That's useful for reproducibility but means the demo never shows the natural variation you'd get from truly random data.
+
+It's also entirely built around the simulated data from data_generator.py. There's no real device, no database, and nothing persists between runs, every time you run main.py it's starting from scratch.

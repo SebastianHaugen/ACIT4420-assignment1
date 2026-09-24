@@ -27,7 +27,8 @@ class Observation:
             activity_level=data["activity_level"],
             signal_quality=data["signal_quality"]
         )
-        
+    
+    # Check if the observation is valid based on its attributes, usin static methos
     @staticmethod
     def is_within_range(value, lower, upper):
         # THis is a static method since it does not depend on the instance itself, 
